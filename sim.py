@@ -24,20 +24,6 @@ def f_thrust_b(alpha: float, beta: float, t: float) -> tuple[float, float, float
     else:
         return (0.0, 0.0, 0.0)
 
-#takes in rocket orintation, thrust vector in rocket frame, anand returns the thrust vector in the world frame
-def f_thrust_w(psi: list[float], f_thrust_b: tuple[float, float, float]) -> tuple[float, float, float]: 
-    F_thrust_b_x = f_thrust_b[0] 
-    F_thrust_b_y = f_thrust_b[1]
-    F_thrust_b_z = f_thrust_b[2]
-    
-    theta = psi[0] 
-    phi = psi[1]
-    
-    return (F_thrust_b_x*math.cos(phi)+F_thrust_b_y*math.sin(theta)*math.sin(phi)+F_thrust_b_z*math.cos(theta)*math.sin(phi), 
-            F_thrust_b_y*math.cos(theta)-F_thrust_b_z*math.sin(theta), 
-            -F_thrust_b_x*math.sin(phi)+F_thrust_b_y*math.sin(theta)*math.cos(phi)+F_thrust_b_z*math.cos(theta)*math.cos(phi)) 
-
-
 #takes in the rocket orintation, and transforms a vector r in rocket frame, to a vector r in the world frame
 def vec_b_to_w(psi: list[float], vec_b: tuple) -> tuple:
     x = vec_b[0] 
@@ -62,14 +48,21 @@ def normalize_q(q: list) -> list:
 
 def multiply_q_p(q: list, p: list) -> list:
     v: list = [0.0, 0.0, 0.0, 0.0]  
-
     v[0] = (q[0]*p[0] - q[1]*p[1] - q[2]*p[2] - q[3]*p[3])  
     v[1] = (q[0]*p[1] + q[1]*p[0] + q[2]*p[3] - q[3]*p[2]) 
     v[2] = (q[0]*p[2] - q[1]*p[3] + q[2]*p[0] + q[3]*p[1]) 
     v[3] = (q[0]*p[3] + q[1]*p[2] - q[2]*p[1] - q[3]*p[0])  
     
     return v
+def q_to_euler(q: list) -> list: 
+    w = q[0] 
+    x = q[1] 
+    y = q[2] 
+    z = q[3]
+    theta = math.asin(max(-1.0, min(1.0, 2*(w*x - z*y))))
+    phi = math.atan2(2*(w*y + x*z), 1 - 2*(x**2 + y**2))
 
+    return [theta, phi]
 def main() -> None:
     #init logs 
     log_r = []
@@ -85,7 +78,7 @@ def main() -> None:
     #init rotation 
     q: list[float] = [1.0, 0.0, 0.0, 0.0] 
     q_dot: list[float] = [0.0, 0.0, 0.0, 0.0] 
-    
+
     theta: float = 0.0
     phi: float = 0.0 
     psi: list[float] = [theta, phi]  
@@ -99,13 +92,13 @@ def main() -> None:
     F_w: list[float] = [0.0, 0.0, 0.0] 
     torque_b = [] 
 
-    alpha: float = 0.1
-    beta: float = 0
+    alpha: float = 0
+    beta: float = 5
     
     for t in np.arange(0, sim_time, dt):
         #thrust vector of rocket in body frame to world frame
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
-        F_thrust_w = f_thrust_w(psi, F_thrust_b)  
+        F_thrust_w = vec_b_to_w(psi, F_thrust_b)  
 
         #net force on rocket, in world frame
         F_w = [F_thrust_w[0], F_thrust_w[1], F_thrust_w[2]-mass*g]
@@ -139,27 +132,26 @@ def main() -> None:
         q_dot[2] = 1/2*q_dot[2] 
         q_dot[3] = 1/2*q_dot[3] 
 
-        #update orintation 
+        #update orintation from rate of change quaternion
         q[0] += dt*q_dot[0]
         q[1] += dt*q_dot[1]
         q[2] += dt*q_dot[2]
         q[3] += dt*q_dot[3]
 
+        #renormalize to fix drift
         q = normalize_q(q) 
         
-        w = q[0] 
-        x = q[1] 
-        y = q[2] 
-        z = q[3]
-        theta = math.asin(max(-1.0, min(1.0, 2*(w*x - z*y))))
-        phi = math.atan2(2*(w*y + x*z), 1 - 2*(x**2 + y**2))
-        psi = [theta, phi]
+        #convert quaternion to euler angles 
+        psi = q_to_euler(q) 
 
         #logging stuff
         if step % log_interval == 0:
             log_r.append([r[0], r[1], r[2]]) 
             log_psi.append([psi[0], psi[1]]) 
         step += 1 
+
+        if r[2] <= 0 and t > 0.1: 
+            break
 
     #Log data to json
     print(f"Final position: x={r[0]:.4f}, y={r[1]:.4f}, z={r[2]:.4f}")
