@@ -52,17 +52,15 @@ def multiply_q_p(q: list, p: list) -> list:
     v[1] = (q[0]*p[1] + q[1]*p[0] + q[2]*p[3] - q[3]*p[2]) 
     v[2] = (q[0]*p[2] - q[1]*p[3] + q[2]*p[0] + q[3]*p[1]) 
     v[3] = (q[0]*p[3] + q[1]*p[2] - q[2]*p[1] - q[3]*p[0])  
-    
+
     return v
+
 def q_to_euler(q: list) -> list: 
-    w = q[0] 
-    x = q[1] 
-    y = q[2] 
-    z = q[3]
-    theta = math.asin(max(-1.0, min(1.0, 2*(w*x - z*y))))
-    phi = math.atan2(2*(w*y + x*z), 1 - 2*(x**2 + y**2))
+    theta = math.atan2(2*(q[0]*q[1]+q[2]*q[3]), 1-2*(q[1]**2+q[2]**2))
+    phi = 2*math.atan2(math.sqrt(1+2*(q[0]*q[2]-q[1]*q[3])), math.sqrt(1-2*(q[0]*q[2]-q[1]*q[3]))) - math.pi/2 
 
     return [theta, phi]
+
 def main() -> None:
     #init logs 
     log_r = []
@@ -93,7 +91,7 @@ def main() -> None:
     torque_b = [] 
 
     alpha: float = 0
-    beta: float = 5
+    beta: float = 1
     
     for t in np.arange(0, sim_time, dt):
         #thrust vector of rocket in body frame to world frame
