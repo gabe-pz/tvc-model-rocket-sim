@@ -38,7 +38,7 @@ def f_thrust_w(psi: list[float], f_thrust_b: tuple[float, float, float]) -> tupl
             -F_thrust_b_x*math.sin(phi)+F_thrust_b_y*math.sin(theta)*math.cos(phi)+F_thrust_b_z*math.cos(theta)*math.cos(phi)) 
 
 
-#takes in the rocket orintation, and transforms a vector r, in rocket frame, to a vector r in the world frame
+#takes in the rocket orintation, and transforms a vector r in rocket frame, to a vector r in the world frame
 def vec_b_to_w(psi: list[float], vec_b: tuple) -> tuple:
     x = vec_b[0] 
     y = vec_b[1] 
@@ -51,6 +51,24 @@ def vec_b_to_w(psi: list[float], vec_b: tuple) -> tuple:
             math.cos(theta)*y - math.sin(theta)*z, 
             -math.sin(phi)*x  + math.cos(phi) *math.sin(theta)*y  + math.cos(phi) *math.cos(theta)*z) 
 
+def vec_to_pure_q(v: list) -> list:
+    return [0, v[0], v[1], v[2]]
+
+def normalize_q(q: list) -> list:
+    mag_q: float = math.sqrt(q[0]**2+q[1]**2+q[2]**2+q[3]**2) 
+    unit_q: list = [q[0]/mag_q, q[1]/mag_q, q[2]/mag_q, q[3]/mag_q] 
+
+    return unit_q
+
+def multiply_q_p(q: list, p: list) -> list:
+    v: list = [0.0, 0.0, 0.0, 0.0]  
+
+    v[0] = (q[0]*p[0] - q[1]*p[1] - q[2]*p[2] - q[3]*p[3])  
+    v[1] = (q[0]*p[1] + q[1]*p[0] + q[2]*p[3] - q[3]*p[2]) 
+    v[2] = (q[0]*p[2] - q[1]*p[3] + q[2]*p[0] + q[3]*p[1]) 
+    v[3] = (q[0]*p[3] + q[1]*p[2] - q[2]*p[1] - q[3]*p[0])  
+    
+    return v
 
 def main() -> None:
     #init logs 
@@ -59,24 +77,28 @@ def main() -> None:
     log_interval = 10
     step = 0
 
-    #init rotation and its derivatives
+    #init postion and its derivatives
     r: list[float] = [0.0, 0.0, 0.0]
     v: list[float] = [0.0, 0.0, 0.0]
-    a: list[float] = [0.0, 0.0, 0.0]
+    a: list[float] = [0.0, 0.0, 0.0] 
 
-    #init rotation and its derivatives
+    #init rotation 
+    q: list[float] = [1.0, 0.0, 0.0, 0.0] 
+    q_dot: list[float] = [0.0, 0.0, 0.0, 0.0] 
+    
     theta: float = 0.0
     phi: float = 0.0 
     psi: list[float] = [theta, phi]  
 
-    #angular velocity and acceleration in world frame
-    omega_b: list[float] = [0.0, 0.0] 
-    alpha_b: list[float]= [0.0, 0.0] 
+    #angular velocity and acceleration
+    omega_b: list[float] = [0.0, 0.0, 0.0] 
+    alpha_b: list[float]= [0.0, 0.0, 0.0] 
+    omega_b_q: list[float] = [0.0, 0.0, 0.0, 0.0] 
 
     #init force and torque
     F_w: list[float] = [0.0, 0.0, 0.0] 
     torque_b = [] 
-    
+
     alpha: float = 0.1
     beta: float = 0
     
@@ -107,15 +129,32 @@ def main() -> None:
         alpha_b[1] = torque_b[1] / moment_inertia
 
         omega_b[0] += dt*alpha_b[0]
-        omega_b[1] += dt*alpha_b[1]
+        omega_b[1] += dt*alpha_b[1] 
 
-        #fix  
-        theta += dt*omega_b[0]
-        phi += dt*omega_b[1]
+        #compute rate of change of quaternion
+        omega_b_q = vec_to_pure_q(omega_b)
+        q_dot = multiply_q_p(q, omega_b_q)
+        q_dot[0] = 1/2*q_dot[0] 
+        q_dot[1] = 1/2*q_dot[1] 
+        q_dot[2] = 1/2*q_dot[2] 
+        q_dot[3] = 1/2*q_dot[3] 
+
+        #update orintation 
+        q[0] += dt*q_dot[0]
+        q[1] += dt*q_dot[1]
+        q[2] += dt*q_dot[2]
+        q[3] += dt*q_dot[3]
+
+        q = normalize_q(q) 
+        
+        w = q[0] 
+        x = q[1] 
+        y = q[2] 
+        z = q[3]
+        theta = math.asin(max(-1.0, min(1.0, 2*(w*x - z*y))))
+        phi = math.atan2(2*(w*y + x*z), 1 - 2*(x**2 + y**2))
         psi = [theta, phi]
 
-        #check if hit ground
-        
         #logging stuff
         if step % log_interval == 0:
             log_r.append([r[0], r[1], r[2]]) 
