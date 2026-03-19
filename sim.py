@@ -1,5 +1,9 @@
 import numpy as np  
-import random, math, json
+import math, json, os
+
+#clear file
+if os.path.isfile("sim_data.json"):
+    os.remove("sim_data.json")
 
 
 #constants
@@ -14,11 +18,13 @@ sim_time: float = 15.5
 burn_time: float = 3.2
 dt: float  = 0.0001 
 
-I_xx: float = 0.02499
-I_yy: float = 0.24986 
+I_xx: float = 0.0249899588
+I_yy: float = 0.0249868814
 
+
+#thrust vector function
 def f_thrust_b(alpha: float, beta: float, t: float) ->list:
-    f_thrust_mag: float = random.uniform(13.5, 14.5) 
+    f_thrust_mag: float = 14
     if(t <= burn_time):
         return [f_thrust_mag*math.sin(alpha), f_thrust_mag*math.sin(beta), f_thrust_mag*math.cos(alpha)*math.cos(beta)]
     else:
@@ -90,8 +96,9 @@ def main() -> None:
     F_w: list[float] = [0.0, 0.0, 0.0] 
     torque_b = [] 
 
-    alpha: float = 0.002
-    beta: float = 0.1
+    #inital start values for angle of tvc
+    alpha: float = 2
+    beta: float = -1
     
     for t in np.arange(0, sim_time, dt):
         #thrust vector of rocket in body frame to world frame
@@ -114,8 +121,8 @@ def main() -> None:
         r[2] += dt*v[2]
 
         #compute torque on rocket, due to thrust in rocket frame
-        torque_b = np.cross(M_arm_thrust_b, F_thrust_b)
-
+        torque_b = np.cross(M_arm_thrust_b, F_thrust_b) 
+ 
         alpha_b[0] = torque_b[0] / I_xx
         alpha_b[1] = torque_b[1] / I_yy
 
@@ -142,17 +149,16 @@ def main() -> None:
         #convert quaternion to euler angles 
         psi = q_to_euler(q) 
 
-
         if r[2] <= 0 and t > 0.1: 
             break
 
-        #logging stuff
+        #log data 
         if step % log_interval == 0:
             log_r.append([r[0], r[1], r[2]]) 
             log_psi.append([psi[0], psi[1]]) 
         step += 1 
 
-    #Log data to json
+    
     print(f"Final position: x={r[0]:.4f}, y={r[1]:.4f}, z={r[2]:.4f}")
     print(f"Final velocity: vx={v[0]:.4f}, vy={v[1]:.4f}, vz={v[2]:.4f}")
     print(f"Final angles:   theta={math.degrees(theta):.4f} deg, phi={math.degrees(phi):.4f} deg")

@@ -40,10 +40,10 @@ def animate(data, skip=1):
     ax = fig.add_subplot(111, projection="3d")
 
     #Trail line
-    (trail_line,) = ax.plot([], [], [], "g--", linewidth=0.8, alpha=0.5)
+    (trail_line,) = ax.plot([], [], [], "b--", linewidth=0.8, alpha=0.5)
 
     #Ground plane indicator
-    ax.plot([x_min, x_max], [0, 0], [0, 0], "k-", linewidth=0.5, alpha=0.3)
+    ax.plot([x_min, x_max], [0, 0], [0, 0], "g-", linewidth=0.5, alpha=0.3)
 
     trail_x, trail_y, trail_z = [], [], []
     rocket_arrow = [None]
@@ -102,4 +102,4 @@ def animate(data, skip=1):
 
 if __name__ == "__main__":
     data = load_data("sim_data.json")
-    animate(data, skip=10)
+    animate(data, skip=10) 
