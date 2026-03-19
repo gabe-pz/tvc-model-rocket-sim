@@ -10,9 +10,10 @@ if os.path.isfile("sim_data.json"):
 mass: float = 1.01074445935
 g: float = 9.81
 d: float = 0.4088384
-
+center_of_pressure: float = 0.08775954
+center_of_gravity: float = 0.4059174
 M_arm_thrust_b: list[float] = [0.0, 0.0, -d]
-M_arm_aero_force_b: list[float] = [0.0, 0.0, 0.3181604] 
+M_arm_aero_force_b: list[float] = [0.0, 0.0, center_of_gravity-center_of_pressure] 
 
 sim_time: float = 15.5
 burn_time: float = 3.2
