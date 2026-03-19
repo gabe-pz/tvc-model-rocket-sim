@@ -12,7 +12,7 @@ g: float = 9.81
 d: float = 0.4088384
 
 M_arm_thrust_b: list[float] = [0.0, 0.0, -d]
-M_arm_rand_forve_b: list[float] = [0.0, 0.0, 0.3181604] 
+M_arm_aero_force_b: list[float] = [0.0, 0.0, 0.3181604] 
 
 sim_time: float = 15.5
 burn_time: float = 3.2
@@ -106,8 +106,8 @@ def main() -> None:
     torque_b = [] 
 
     #inital start values for angle of tvc
-    alpha: float = 0
-    beta: float = 0 
+    alpha: float = -0.25
+    beta: float = 0.25
 
     for t in np.arange(0, sim_time, dt):
         #thrust vector of rocket in body frame to world frame
@@ -134,7 +134,7 @@ def main() -> None:
 
         #compute torque on rocket, due to thrust in rocket frame
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
-        torque_wind_b = np.cross(M_arm_rand_forve_b, F_wind_b) 
+        torque_wind_b = np.cross(M_arm_aero_force_b, F_wind_b) 
         
         torque_b = [torque_thrust_b[0]+torque_wind_b[0], torque_thrust_b[1]+torque_wind_b[1], torque_thrust_b[2]+torque_wind_b[2]] 
         alpha_b[0] = torque_b[0] / I_xx
