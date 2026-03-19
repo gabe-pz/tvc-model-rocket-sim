@@ -1,10 +1,8 @@
 import numpy as np  
-import math, json, os
-import random
-#clear file
+import math, json, os, random 
+#clear file before new run
 if os.path.isfile("sim_data.json"):
     os.remove("sim_data.json")
-
 
 #constants
 mass: float = 1.01074445935
@@ -73,14 +71,14 @@ def multiply_q_p(q: list, p: list) -> list:
 
 def q_to_euler(q: list) -> list: 
     theta = math.atan2(2*(q[0]*q[1]+q[2]*q[3]), 1-2*(q[1]**2+q[2]**2))
-    phi = 2*math.atan2(math.sqrt(1+2*(q[0]*q[2]-q[1]*q[3])), math.sqrt(1-2*(q[0]*q[2]-q[1]*q[3]))) - math.pi/2 
-
+    phi = math.asin(2*(q[0]*q[2] - q[1]*q[3]))
     return [theta, phi]
 
 def main() -> None:
     #init logs 
-    log_r: list = []
-    log_psi: list = []
+    log_r: list[list[float]] = []
+    log_psi: list[list[float]] = []
+
     log_interval: int = 10
     step: float = 0
 
@@ -93,9 +91,7 @@ def main() -> None:
     q: list[float] = [1.0, 0.0, 0.0, 0.0] 
     q_dot: list[float] = [0.0, 0.0, 0.0, 0.0] 
 
-    theta: float = 0.0
-    phi: float = 0.0 
-    psi: list[float] = [theta, phi]  
+    psi: list[float] = [0.0, 0.0] # psi = (theta, phi),  
 
     #angular velocity and acceleration
     omega_b: list[float] = [0.0, 0.0, 0.0] 
@@ -107,14 +103,17 @@ def main() -> None:
     torque_b = [] 
 
     #inital start values for angle of tvc
-    alpha: float = -0.25
-    beta: float = 0.25
+    alpha: float = -0.01
+    beta: float = 0.02
 
     for t in np.arange(0, sim_time, dt):
+        if t > 2: 
+            alpha = 2
+            beta = 4
         #thrust vector of rocket in body frame to world frame
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
         F_thrust_w = rotate_v_w(q, F_thrust_b)   
-
+        
         F_wind_w = [random.uniform(-0.02, 0.05), random.uniform(-0.02, 0.055), random.uniform(0.01, 0.1)] 
         F_wind_b = rotate_v_b(q, F_wind_w)   
 
