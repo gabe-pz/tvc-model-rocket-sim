@@ -1,18 +1,18 @@
 import numpy as np  
 import math, json, os
-
+import random
 #clear file
 if os.path.isfile("sim_data.json"):
     os.remove("sim_data.json")
 
 
 #constants
-mass: float = 0.81
+mass: float = 1.01074445935
 g: float = 9.81
+d: float = 0.4088384
 
-M_arm_thrust_b: tuple[float, float, float] = (0.0, 0.0, -0.2) 
-radius: float = 0.0762     
-length: float = 0.635  
+M_arm_thrust_b: list[float] = [0.0, 0.0, -d]
+M_arm_rand_forve_b: list[float] = [0.0, 0.0, 0.3181604] 
 
 sim_time: float = 15.5
 burn_time: float = 3.2
@@ -31,7 +31,7 @@ def f_thrust_b(alpha: float, beta: float, t: float) ->list:
         return [0.0, 0.0, 0.0]
 
 #takes in the rocket orintation, and transforms a vector r in rocket frame, to a vector r in the world frame
-def rotate_v(q: list[float], v: list[float]) -> list[float]:
+def rotate_v_w(q: list[float], v: list[float]) -> list[float]:
     v_q: list[float] = vec_to_pure_q(v) 
     v_1: list[float] = multiply_q_p(q, v_q) 
     q_conjugate: list[float] = conjugate_q(q) 
@@ -40,6 +40,15 @@ def rotate_v(q: list[float], v: list[float]) -> list[float]:
 
     return v_world
 
+#takes in the rocket orintation, and transforms a vector r in world frame, to a vector r in the rocket frame
+def rotate_v_b(q: list[float], v: list[float]) -> list[float]:
+    v_q: list[float] = vec_to_pure_q(v) 
+    q_conjugate: list[float] = conjugate_q(q) 
+    v_1: list[float] = multiply_q_p(q_conjugate, v_q)
+    v_body_q: list[float] = multiply_q_p(v_1, q) 
+    v_body: list[float] = [v_body_q[1], v_body_q[2], v_body_q[3]]
+
+    return v_body
 def vec_to_pure_q(v: list) -> list:
     return [0, v[0], v[1], v[2]]
 
@@ -97,17 +106,20 @@ def main() -> None:
     torque_b = [] 
 
     #inital start values for angle of tvc
-    alpha: float = 2
-    beta: float = -1
-    
+    alpha: float = 0
+    beta: float = 0 
+
     for t in np.arange(0, sim_time, dt):
         #thrust vector of rocket in body frame to world frame
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
-        F_thrust_w = rotate_v(q, F_thrust_b)  
+        F_thrust_w = rotate_v_w(q, F_thrust_b)   
+
+        F_wind_w = [random.uniform(-0.02, 0.05), random.uniform(-0.02, 0.055), random.uniform(0.01, 0.1)] 
+        F_wind_b = rotate_v_b(q, F_wind_w)   
 
         #net force on rocket, in world frame
-        F_w = [F_thrust_w[0], F_thrust_w[1], F_thrust_w[2]-mass*g]
-
+        F_w = [F_thrust_w[0]+F_wind_w[0], F_thrust_w[1]+F_wind_w[1], F_thrust_w[2]-mass*g+F_wind_w[2]]
+  
         a[0] = F_w[0] / mass
         a[1] = F_w[1] / mass 
         a[2] = F_w[2] / mass
@@ -121,8 +133,10 @@ def main() -> None:
         r[2] += dt*v[2]
 
         #compute torque on rocket, due to thrust in rocket frame
-        torque_b = np.cross(M_arm_thrust_b, F_thrust_b) 
- 
+        torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
+        torque_wind_b = np.cross(M_arm_rand_forve_b, F_wind_b) 
+        
+        torque_b = [torque_thrust_b[0]+torque_wind_b[0], torque_thrust_b[1]+torque_wind_b[1], torque_thrust_b[2]+torque_wind_b[2]] 
         alpha_b[0] = torque_b[0] / I_xx
         alpha_b[1] = torque_b[1] / I_yy
 
@@ -143,7 +157,7 @@ def main() -> None:
         q[2] += dt*q_dot[2]
         q[3] += dt*q_dot[3]
 
-        #renormalize to fix drift
+        #renormalize to account for numerical drift
         q = normalize_q(q) 
         
         #convert quaternion to euler angles 
@@ -161,7 +175,7 @@ def main() -> None:
     
     print(f"Final position: x={r[0]:.4f}, y={r[1]:.4f}, z={r[2]:.4f}")
     print(f"Final velocity: vx={v[0]:.4f}, vy={v[1]:.4f}, vz={v[2]:.4f}")
-    print(f"Final angles:   theta={math.degrees(theta):.4f} deg, phi={math.degrees(phi):.4f} deg")
+    print(f"Final angles:   theta={math.degrees(psi[0]):.4f} deg, phi={math.degrees(psi[1]):.4f} deg")    
     data = {"r": log_r, "psi": log_psi} 
     with open("sim_data.json", "w") as f:
         json.dump(data, f) 
