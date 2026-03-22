@@ -49,7 +49,7 @@ ax.set_zlim(min(z) - pad, max(z) + pad)
 #create cg point, that gets traced out
 point, = ax.plot([], [], [], 'ro', markersize=6)#type: ignore
 
-#create arrow that points from cg
+#create arrow that points from cg 
 arrow = ax.quiver(0, 0, 0, 0, 0, 0, color='blue', length=2)  # type: ignore
 
 trail, = ax.plot([], [], [], 'g--', linewidth=1, alpha=0.5) 
