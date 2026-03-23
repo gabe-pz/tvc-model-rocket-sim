@@ -8,10 +8,11 @@ if os.path.isfile("sim_data.json"):
 
 #rocket constants
 mass: float = 1.01074445935 
-distance_to_thrust_vector: float = 0.4088384
+distance_to_thrust_vector: float = 0.6477
 center_of_pressure: float = 0.08775954
 center_of_gravity: float = 0.4059174
-M_arm_thrust_b: list[float] = [0.0, 0.0, -distance_to_thrust_vector]
+
+M_arm_thrust_b: list[float] = [0.0, 0.0, center_of_gravity-distance_to_thrust_vector] 
 M_arm_aero_force_b: list[float] = [0.0, 0.0, center_of_gravity-center_of_pressure] 
 I_xx: float = 0.0249899588
 I_yy: float = 0.0249868814
@@ -24,18 +25,21 @@ log_interval: int = 10
 
 #physical constants
 g: float = 9.81
+drag_coef: float = 0.291
+reference_area: float = 0.00456
+rho: float = 1.187 
 
 #wind 
-u: float = 5.0 
+u: float = 7.0 
 I_u: float = 0.08 
 sigma_u: float = I_u*u 
-alpha: float = 5.0/3.0 
+alpha_coef: float = 5.0/3.0 
 
 a_constants: list[float] = [0.0, 0.0, 0.0]
 a_constants[0] = 1.0
 
 for k in range(1, 3): 
-    a_constants[k] = (k-1-alpha/2.0)*a_constants[k-1]/k
+    a_constants[k] = (k-1-alpha_coef/2.0)*a_constants[k-1]/k
 
 pink_noise_std: float = 2.252
 
@@ -99,21 +103,44 @@ def main() -> None:
     torque_b = [] 
 
     #inital start values for angle of tvc
-    alpha: float = -0.01
-    beta: float = 0.02
+    alpha: float = 0.0
+    beta: float = 0.0
 
     wind_speed = 0.0
+    wind_direction = [1.0, 0.25, 0.3] 
+    wind_vector: list[float] = [wind_speed*wind_direction[0], wind_speed*wind_direction[1], wind_speed*wind_direction[2]] 
+    v_rel_fluid: list[float] = [0.0, 0.0, 0.0] 
+    F_d_w: list[float] = [0.0, 0.0, 0.0] 
+    F_d_b: list[float] = [0.0, 0.0, 0.0] 
+    v_rel_mag: float = 0.0
 
     for i, t in enumerate(sim_times):
-        wind_speed = wind_at_sim[i]
-        print(wind_speed) 
         #1. Force and Position
-        #Force of thrust, from body to worl
+
+        wind_speed = wind_at_sim[i]
+        wind_vector[0] = wind_speed*wind_direction[0] 
+        wind_vector[1] = wind_speed*wind_direction[1] 
+        wind_vector[2] = wind_speed*wind_direction[2] 
+        
+
+        v_rel_fluid[0] = v[0] - wind_vector[0] 
+        v_rel_fluid[1] = v[1] - wind_vector[1] 
+        v_rel_fluid[2] = v[2] - wind_vector[2] 
+        v_rel_mag = math.sqrt(v_rel_fluid[0]**2+v_rel_fluid[1]**2+v_rel_fluid[2]**2) 
+
+        F_d_w[0] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[0]*v_rel_mag)
+        F_d_w[1] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[1]*v_rel_mag)
+        F_d_w[2] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[2]*v_rel_mag) 
+
+        F_d_b = rm.rotate_v_b(q, F_d_w)
+        
+        #Force of thrust, from body to world
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
         F_thrust_w = rm.rotate_v_w(q, F_thrust_b)   
         
         #Sum of forces in world
-        F_w = [F_thrust_w[0], F_thrust_w[1], F_thrust_w[2]-mass*g]
+        F_w = [F_thrust_w[0]+F_d_w[0], F_thrust_w[1]+F_d_w[1], F_thrust_w[2]-mass*g+F_d_w[2]] 
+
         
         #Compute accleration
         a[0] = F_w[0] / mass
@@ -128,13 +155,14 @@ def main() -> None:
         r[1] += dt*v[1] 
         r[2] += dt*v[2]
 
-        #2. Torque and Rotation
+        #2. Torque and Rotation 
 
         #Torque on the rocket
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
+        torque_d_b = np.cross(M_arm_aero_force_b, F_d_b) 
 
         #sum of torque on rocket
-        torque_b = [torque_thrust_b[0], torque_thrust_b[1], torque_thrust_b[2]] 
+        torque_b = [torque_thrust_b[0]+torque_d_b[0], torque_thrust_b[1]+torque_d_b[1], torque_thrust_b[2]+torque_d_b[2]]  
 
         #Compute angular acceleration
         alpha_b[0] = torque_b[0] / I_xx
