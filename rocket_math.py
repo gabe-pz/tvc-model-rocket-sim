@@ -19,19 +19,19 @@ def rotate_v_b(q: list[float], v: list[float]) -> list[float]:
     v_body: list[float] = [v_body_q[1], v_body_q[2], v_body_q[3]]
 
     return v_body
-def vec_to_pure_q(v: list) -> list:
+def vec_to_pure_q(v: list[float]) -> list[float]:
     return [0, v[0], v[1], v[2]]
 
-def normalize_q(q: list) -> list:
+def normalize_q(q: list[float]) -> list[float]:
     mag_q: float = math.sqrt(q[0]**2+q[1]**2+q[2]**2+q[3]**2) 
     unit_q: list = [q[0]/mag_q, q[1]/mag_q, q[2]/mag_q, q[3]/mag_q] 
 
     return unit_q
 
-def conjugate_q(q: list) -> list:
+def conjugate_q(q: list[float]) -> list[float]:
     return [q[0], -q[1], -q[2], -q[3]] 
 
-def multiply_q_p(q: list, p: list) -> list:
+def multiply_q_p(q: list[float], p: list[float]) -> list[float]:
     v: list = [0.0, 0.0, 0.0, 0.0]  
     v[0] = (q[0]*p[0] - q[1]*p[1] - q[2]*p[2] - q[3]*p[3])  
     v[1] = (q[0]*p[1] + q[1]*p[0] + q[2]*p[3] - q[3]*p[2]) 
@@ -40,7 +40,7 @@ def multiply_q_p(q: list, p: list) -> list:
 
     return v
 
-def q_to_euler(q: list) -> list: 
+def q_to_euler(q: list[float]) -> list[float]: 
     theta = math.atan2(2*(q[0]*q[1]+q[2]*q[3]), 1-2*(q[1]**2+q[2]**2))
     phi = math.asin(2*(q[0]*q[2] - q[1]*q[3]))
     return [theta, phi]

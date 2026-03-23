@@ -25,34 +25,33 @@ log_interval: int = 10
 
 #physical constants
 g: float = 9.81
+
 drag_coef: float = 0.291
 reference_area: float = 0.00456
 rho: float = 1.187 
 
-#wind 
-u: float = 7.0 
+#wind
+u: float = 8.0 
 I_u: float = 0.08 
 sigma_u: float = I_u*u 
 alpha_coef: float = 5.0/3.0 
 
 a_constants: list[float] = [0.0, 0.0, 0.0]
 a_constants[0] = 1.0
-
 for k in range(1, 3): 
     a_constants[k] = (k-1-alpha_coef/2.0)*a_constants[k-1]/k
-
 pink_noise_std: float = 2.252
 
 x_prev_1: float = 0.0 
 x_prev_2: float = 0.0
 
 t_total: float = sim_time        # Simulate 20 seconds
-dt_turb: float = 0.05        # One sample every 0.05s (20 Hz)
+dt_turb: float = 0.05            # One sample every 0.05s (20 Hz)
 n_samples = int(t_total / dt_turb) + 1
 
 wind = []
 
-for n in range(n_samples):
+for _ in range(n_samples):
     w_n = np.random.randn()
 
     x_n = w_n - a_constants[1] * x_prev_1 - a_constants[2] * x_prev_2
@@ -103,34 +102,35 @@ def main() -> None:
     torque_b = [] 
 
     #inital start values for angle of tvc
-    alpha: float = 0.0
-    beta: float = 0.0
+    alpha: float = 0.002
+    beta: float = 0.001
 
-    wind_speed = 0.0
-    wind_direction = [1.0, 0.25, 0.3] 
-    wind_vector: list[float] = [wind_speed*wind_direction[0], wind_speed*wind_direction[1], wind_speed*wind_direction[2]] 
+    #init wind 
+    wind_speed: float = 0.0
+    wind_direction: list[float] = [1.0, 1.0, 0.0]  
+    wind_velocity: list[float] = [wind_speed*wind_direction[0], wind_speed*wind_direction[1], wind_speed*wind_direction[2]] 
+
+    #init drag 
     v_rel_fluid: list[float] = [0.0, 0.0, 0.0] 
     F_d_w: list[float] = [0.0, 0.0, 0.0] 
     F_d_b: list[float] = [0.0, 0.0, 0.0] 
-    v_rel_mag: float = 0.0
-
     for i, t in enumerate(sim_times):
         #1. Force and Position
-
-        wind_speed = wind_at_sim[i]
-        wind_vector[0] = wind_speed*wind_direction[0] 
-        wind_vector[1] = wind_speed*wind_direction[1] 
-        wind_vector[2] = wind_speed*wind_direction[2] 
         
+        #determine wind
+        wind_speed = wind_at_sim[i] 
+        wind_velocity[0] = wind_speed*wind_direction[0] 
+        wind_velocity[1] = wind_speed*wind_direction[1] 
+        wind_velocity[2] = wind_speed*wind_direction[2] 
+        
+        #determine drag force
+        v_rel_fluid[0] = v[0] - wind_velocity[0] 
+        v_rel_fluid[1] = v[1] - wind_velocity[1] 
+        v_rel_fluid[2] = v[2] - wind_velocity[2] 
 
-        v_rel_fluid[0] = v[0] - wind_vector[0] 
-        v_rel_fluid[1] = v[1] - wind_vector[1] 
-        v_rel_fluid[2] = v[2] - wind_vector[2] 
-        v_rel_mag = math.sqrt(v_rel_fluid[0]**2+v_rel_fluid[1]**2+v_rel_fluid[2]**2) 
-
-        F_d_w[0] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[0]*v_rel_mag)
-        F_d_w[1] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[1]*v_rel_mag)
-        F_d_w[2] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[2]*v_rel_mag) 
+        F_d_w[0] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[0]*abs(v_rel_fluid[0]))
+        F_d_w[1] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[1]*abs(v_rel_fluid[1]))
+        F_d_w[2] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[2]*abs(v_rel_fluid[2]))  
 
         F_d_b = rm.rotate_v_b(q, F_d_w)
         
