@@ -19,11 +19,50 @@ I_yy: float = 0.0249868814
 #sim constants
 sim_time: float = 20
 burn_time: float = 3.5
-dt: float  = 0.000001 
+dt: float  = 0.0001 
 log_interval: int = 10
 
 #physical constants
 g: float = 9.81
+
+#wind 
+u: float = 5.0 
+I_u: float = 0.08 
+sigma_u: float = I_u*u 
+alpha: float = 5.0/3.0 
+
+a_constants: list[float] = [0.0, 0.0, 0.0]
+a_constants[0] = 1.0
+
+for k in range(1, 3): 
+    a_constants[k] = (k-1-alpha/2.0)*a_constants[k-1]/k
+
+pink_noise_std: float = 2.252
+
+x_prev_1: float = 0.0 
+x_prev_2: float = 0.0
+
+t_total: float = sim_time        # Simulate 20 seconds
+dt_turb: float = 0.05        # One sample every 0.05s (20 Hz)
+n_samples = int(t_total / dt_turb) + 1
+
+wind = []
+
+for n in range(n_samples):
+    w_n = np.random.randn()
+
+    x_n = w_n - a_constants[1] * x_prev_1 - a_constants[2] * x_prev_2
+    x_normalized = x_n / pink_noise_std
+
+    U_n = u + sigma_u * x_normalized
+
+    wind.append(U_n)
+    x_prev_2 = x_prev_1
+    x_prev_1 = x_n
+
+turb_times = np.arange(0, t_total + dt_turb, dt_turb)[:n_samples]
+sim_times = np.arange(0, t_total, dt) 
+wind_at_sim = np.interp(sim_times, turb_times, wind) 
 
 #thrust vector function
 def f_thrust_b(alpha: float, beta: float, t: float) ->list:
@@ -63,19 +102,18 @@ def main() -> None:
     alpha: float = -0.01
     beta: float = 0.02
 
-    for t in np.arange(0, sim_time, dt):
-        #1. Force and Position
+    wind_speed = 0.0
 
+    for i, t in enumerate(sim_times):
+        wind_speed = wind_at_sim[i]
+        print(wind_speed) 
+        #1. Force and Position
         #Force of thrust, from body to worl
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
         F_thrust_w = rm.rotate_v_w(q, F_thrust_b)   
         
-        #Force of wind, from world to body
-        F_wind_w = [random.uniform(-0.02, 0.05), random.uniform(-0.02, 0.055), random.uniform(0.01, 0.1)] 
-        F_wind_b = rm.rotate_v_b(q, F_wind_w)   
-
         #Sum of forces in world
-        F_w = [F_thrust_w[0]+F_wind_w[0], F_thrust_w[1]+F_wind_w[1], F_thrust_w[2]-mass*g+F_wind_w[2]]
+        F_w = [F_thrust_w[0], F_thrust_w[1], F_thrust_w[2]-mass*g]
         
         #Compute accleration
         a[0] = F_w[0] / mass
@@ -94,10 +132,9 @@ def main() -> None:
 
         #Torque on the rocket
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
-        torque_wind_b = np.cross(M_arm_aero_force_b, F_wind_b) 
 
         #sum of torque on rocket
-        torque_b = [torque_thrust_b[0]+torque_wind_b[0], torque_thrust_b[1]+torque_wind_b[1], torque_thrust_b[2]+torque_wind_b[2]] 
+        torque_b = [torque_thrust_b[0], torque_thrust_b[1], torque_thrust_b[2]] 
 
         #Compute angular acceleration
         alpha_b[0] = torque_b[0] / I_xx
