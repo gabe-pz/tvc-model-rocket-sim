@@ -25,12 +25,11 @@ log_interval: int = 10
 
 #physical constants
 g: float = 9.81
-
 drag_coef: float = 0.291
 reference_area: float = 0.00456
 rho: float = 1.187 
 
-#wind
+#wind generation
 u: float = 8.0 
 I_u: float = 0.08 
 sigma_u: float = I_u*u 
@@ -66,6 +65,7 @@ for _ in range(n_samples):
 turb_times = np.arange(0, t_total + dt_turb, dt_turb)[:n_samples]
 sim_times = np.arange(0, t_total, dt) 
 wind_at_sim = np.interp(sim_times, turb_times, wind) 
+#end wind generation 
 
 #thrust vector function
 def f_thrust_b(alpha: float, beta: float, t: float) ->list:
@@ -102,8 +102,8 @@ def main() -> None:
     torque_b = [] 
 
     #inital start values for angle of tvc
-    alpha: float = 0.002
-    beta: float = 0.001
+    alpha: float = 0.0
+    beta: float = 0.0
 
     #init wind 
     wind_speed: float = 0.0
@@ -111,9 +111,13 @@ def main() -> None:
     wind_velocity: list[float] = [wind_speed*wind_direction[0], wind_speed*wind_direction[1], wind_speed*wind_direction[2]] 
 
     #init drag 
-    v_rel_fluid: list[float] = [0.0, 0.0, 0.0] 
-    F_d_w: list[float] = [0.0, 0.0, 0.0] 
-    F_d_b: list[float] = [0.0, 0.0, 0.0] 
+    v_rel_fluid_w: list[float] = [0.0, 0.0, 0.0] 
+    v_rel_fluid_b: list[float] = [0.0, 0.0, 0.0] 
+    v_rel_fluid_mag: float = 0.0
+
+    F_drag_w: list[float] = [0.0, 0.0, 0.0] 
+    F_drag_b: list[float] = [0.0, 0.0, 0.0] 
+
     for i, t in enumerate(sim_times):
         #1. Force and Position
         
@@ -123,25 +127,26 @@ def main() -> None:
         wind_velocity[1] = wind_speed*wind_direction[1] 
         wind_velocity[2] = wind_speed*wind_direction[2] 
         
-        #determine drag force
-        v_rel_fluid[0] = v[0] - wind_velocity[0] 
-        v_rel_fluid[1] = v[1] - wind_velocity[1] 
-        v_rel_fluid[2] = v[2] - wind_velocity[2] 
+        #determine veloctiy of rocket relative to fluid in world frame
+        v_rel_fluid_w[0] = v[0] - wind_velocity[0] 
+        v_rel_fluid_w[1] = v[1] - wind_velocity[1] 
+        v_rel_fluid_w[2] = v[2] - wind_velocity[2] 
+        v_rel_fluid_mag = math.sqrt(v_rel_fluid_w[0]**2+v_rel_fluid_w[1]**2+v_rel_fluid_w[2]**2) 
 
-        F_d_w[0] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[0]*abs(v_rel_fluid[0]))
-        F_d_w[1] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[1]*abs(v_rel_fluid[1]))
-        F_d_w[2] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid[2]*abs(v_rel_fluid[2]))  
+        #determine drag force in world frame 
+        F_drag_w[0] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid_mag*v_rel_fluid_w[0]) 
+        F_drag_w[1] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid_mag*v_rel_fluid_w[1]) 
+        F_drag_w[2] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid_mag*v_rel_fluid_w[2]) 
+        #convert drag force to body frame
+        F_drag_b = rm.rotate_v_b(q, F_drag_w) 
 
-        F_d_b = rm.rotate_v_b(q, F_d_w)
-        
         #Force of thrust, from body to world
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
         F_thrust_w = rm.rotate_v_w(q, F_thrust_b)   
         
         #Sum of forces in world
-        F_w = [F_thrust_w[0]+F_d_w[0], F_thrust_w[1]+F_d_w[1], F_thrust_w[2]-mass*g+F_d_w[2]] 
+        F_w = [F_thrust_w[0]+F_drag_w[0], F_thrust_w[1]+F_drag_w[1], F_thrust_w[2]-mass*g+F_drag_w[2]] 
 
-        
         #Compute accleration
         a[0] = F_w[0] / mass
         a[1] = F_w[1] / mass 
@@ -159,10 +164,10 @@ def main() -> None:
 
         #Torque on the rocket
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
-        torque_d_b = np.cross(M_arm_aero_force_b, F_d_b) 
+        torque_drag_b = np.cross(M_arm_aero_force_b, F_drag_b) 
 
         #sum of torque on rocket
-        torque_b = [torque_thrust_b[0]+torque_d_b[0], torque_thrust_b[1]+torque_d_b[1], torque_thrust_b[2]+torque_d_b[2]]  
+        torque_b = [torque_thrust_b[0]+torque_drag_b[0], torque_thrust_b[1]+torque_drag_b[1], torque_thrust_b[2]+torque_drag_b[2]]  
 
         #Compute angular acceleration
         alpha_b[0] = torque_b[0] / I_xx
