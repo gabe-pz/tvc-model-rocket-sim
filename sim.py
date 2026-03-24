@@ -220,7 +220,7 @@ def main() -> None:
         psi = rm.q_to_euler(q) 
 
         #Check if reach ground
-        if r[2] <= 0 and t > 0.1: 
+        if r[2]-0.25 <= 0 and t > 0.5: 
             break
 
         #Log data 

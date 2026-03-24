@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import json
+import json, math
 
 
 with open('sim_data.json', 'r') as f:
@@ -10,8 +10,8 @@ psi = data['psi']
 theta: list[float] = []
 phi: list[float] = [] 
 for p in psi:
-    theta.append(p[0]) 
-    phi.append(p[1]) 
+    theta.append(math.degrees(p[0])) 
+    phi.append(math.degrees(p[1])) 
 
 #log time
 dt = 0.0001 
