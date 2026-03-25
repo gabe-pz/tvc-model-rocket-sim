@@ -32,8 +32,8 @@ reference_area: float = 0.00456
 rho: float = 1.187 
 
 #wind generation
-u: float = 7.0 
-I_u: float = 0.08 
+u: float = 5.0 
+I_u: float = 0.05
 sigma_u: float = I_u*u 
 alpha_coef: float = 5.0/3.0 
 
@@ -71,14 +71,16 @@ wind_at_sim = np.interp(sim_times, turb_times, wind)
 
 #thrust vector function
 def f_thrust_b(alpha: float, beta: float, t: float) ->list:
-    f_thrust_mag: float = 14.4 
+    f_thrust_mag: float = 15
     if(t <= burn_time):
         return [f_thrust_mag*math.sin(alpha), f_thrust_mag*math.sin(beta), f_thrust_mag*math.cos(alpha)*math.cos(beta)]
     else:
         return [0.0, 0.0, 0.0]
 
+def clamp(value: float, min_val: float, max_val: float) -> float:
+    return min(max(value, min_val), max_val) 
 
-def main() -> None:
+def main() -> None: 
     #init log stuff
     log_r: list[list[float]] = []
     log_psi: list[list[float]] = []
@@ -125,9 +127,19 @@ def main() -> None:
     
     F_norm_w: list[float] = [0.0, 0.0, 0.0]
     F_norm_b: list[float] = [0.0, 0.0, 0.0]
+
+    error_x: float = 0.0
+    error_y: float = 0.0 
+
     for i, t in enumerate(sim_times):
         #1. Force and Position
         
+        error_x = 0 - math.degrees(psi[0]) 
+        error_y = 0 - math.degrees(psi[1]) 
+
+        alpha = clamp((1.5*error_x), -5, 5) 
+        beta = clamp((1.5*error_y), -5, 5) 
+
         #determine wind
         wind_speed = wind_at_sim[i] 
         wind_velocity[0] = wind_speed*wind_direction[0] 
@@ -154,11 +166,11 @@ def main() -> None:
         F_drag_b = rm.rotate_v_b(q, F_drag_w) 
         
 
-        #determine normal force in world frame
-        F_norm_w[0] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
-        F_norm_w[1] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa
-        #convert normal force to body frame
-        F_norm_b = rm.rotate_v_b(q, F_norm_w) 
+        #determine normal force in body frame
+        F_norm_b[0] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
+        F_norm_b[1] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa 
+        #convert normal force to world frame
+        F_norm_w = rm.rotate_v_w(q, F_norm_b) 
 
         #Force of thrust, from body to world
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
@@ -220,7 +232,11 @@ def main() -> None:
         psi = rm.q_to_euler(q) 
 
         #Check if reach ground
-        if r[2]-0.25 <= 0 and t > 0.5: 
+        if r[2] <= 0 and t > 0.5: 
+            print("*****FLIGHT STATS*****")
+            print(f"Total flight time: {t:.2f}s")
+            print(f"Max altitude: {max(log_r, key=lambda p: p[2])[2]:.2f}m")
+            
             break
 
         #Log data 
@@ -230,9 +246,10 @@ def main() -> None:
         step += 1 
 
     #Final print log
-    print(f"Final position: x={r[0]}, y={r[1]}, z={r[2]}")  
-    print(f"Final velocity: vx={v[0]}, vy={v[1]}, vz={v[2]}")
-    print(f"Final angles:   theta={math.degrees(psi[0])} deg, phi={math.degrees(psi[1])} deg")    
+    print()
+    print("*****Final r and ψ*****") 
+    print(f"Final r: x={r[0]:.2f}, y={r[1]:.2f}, z={r[2]:.2f}")  
+    print(f"Final ψ:   theta={math.degrees(psi[0]):.2f} deg, phi={math.degrees(psi[1]):.2f} deg")    
 
     #Log flight data to json
     data = {"r": log_r, "psi": log_psi} 
