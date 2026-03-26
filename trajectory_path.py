@@ -13,6 +13,7 @@ effective_dt = log_interval * dt  # 0.001s per logged frame
 
 # interval frames logged
 step: int = 8
+
 # real sim‑time between animation frames
 frame_dt = effective_dt * step  # 0.008s
 # FuncAnimation interval is in milliseconds
@@ -23,6 +24,7 @@ positions: list[list[float]] = data['r']
 x: list[float] = []
 y: list[float] = []
 z: list[float] = []
+
 for p in positions:
     x.append(p[0])
     y.append(p[1])

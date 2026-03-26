@@ -131,15 +131,16 @@ def main() -> None:
     error_x: float = 0.0
     error_y: float = 0.0 
 
+    kp_x: float = 0.75
+    kp_y: float = 0.75 
     for i, t in enumerate(sim_times):
         #1. Force and Position
         
         error_x = 0 - math.degrees(psi[0]) 
         error_y = 0 - math.degrees(psi[1]) 
 
-        alpha = clamp((1.5*error_x), -5, 5) 
-        beta = clamp((1.5*error_y), -5, 5) 
-
+        alpha = clamp((kp_x*error_x), -5, 5)
+        beta = clamp((kp_y*error_y), -5, 5) 
         #determine wind
         wind_speed = wind_at_sim[i] 
         wind_velocity[0] = wind_speed*wind_direction[0] 
@@ -167,8 +168,8 @@ def main() -> None:
         
 
         #determine normal force in body frame
-        F_norm_b[0] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
-        F_norm_b[1] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa 
+        F_norm_b[0] = 0.125*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
+        F_norm_b[1] = 0.125*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa 
         #convert normal force to world frame
         F_norm_w = rm.rotate_v_w(q, F_norm_b) 
 
@@ -188,6 +189,7 @@ def main() -> None:
         v[0] += dt*a[0]  
         v[1] += dt*a[1] 
         v[2] += dt*a[2]  
+
         r[0] += dt*v[0]   
         r[1] += dt*v[1] 
         r[2] += dt*v[2]
@@ -235,7 +237,7 @@ def main() -> None:
         if r[2] <= 0 and t > 0.5: 
             print("*****FLIGHT STATS*****")
             print(f"Total flight time: {t:.2f}s")
-            print(f"Max altitude: {max(log_r, key=lambda p: p[2])[2]:.2f}m")
+            print(f"Max altitude: {(max(log_r, key=lambda p: p[2])[2]):.2f}m")
             
             break
 
