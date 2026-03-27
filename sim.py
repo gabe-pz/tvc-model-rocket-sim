@@ -23,6 +23,18 @@ burn_time: float = 3.5
 dt: float  = 0.0001 
 log_interval: int = 10
 
+#pid 
+setpoint: float = 0.0 
+
+kp_x: float = 0.1
+kp_y: float = 0.1
+
+ki_x: float = 0.01
+ki_y: float = 0.01
+
+kd_x: float = 0.255
+kd_y: float = 0.255
+
 #physical constants
 g: float = 9.81
 drag_coef: float = 0.291
@@ -80,6 +92,7 @@ def f_thrust_b(alpha: float, beta: float, t: float) ->list:
 def clamp(value: float, min_val: float, max_val: float) -> float:
     return min(max(value, min_val), max_val) 
 
+
 def main() -> None: 
     #init log stuff
     log_r: list[list[float]] = []
@@ -130,18 +143,37 @@ def main() -> None:
 
     error_x: float = 0.0
     error_y: float = 0.0 
+    error_x_prev: float = 0.0 
+    error_y_prev: float = 0.0
 
-    kp_x: float = 0.75
-    kp_y: float = 0.75 
+    p_term_x: float = 0.0
+    p_term_y: float = 0.0 
+    
+    i_term_x: float = 0.0
+    i_term_y: float = 0.0 
+    
+    d_term_x: float = 0.0
+    d_term_y: float = 0.0 
     for i, t in enumerate(sim_times):
-        #1. Force and Position
+        error_x = setpoint - math.degrees(psi[0])
+        error_y = setpoint - math.degrees(psi[1]) 
         
-        error_x = 0 - math.degrees(psi[0]) 
-        error_y = 0 - math.degrees(psi[1]) 
+        p_term_x = kp_x*error_x
+        p_term_y = kp_y*error_y
 
-        alpha = clamp((kp_x*error_x), -5, 5)
-        beta = clamp((kp_y*error_y), -5, 5) 
-        #determine wind
+        i_term_x += dt*ki_x*error_x
+        i_term_y += dt*ki_y*error_y
+
+        d_term_x = kd_x*((error_x - error_x_prev) / dt)
+        d_term_y = kd_y*((error_y - error_y_prev) / dt)
+
+        error_x_prev = error_x 
+        error_y_prev = error_y
+
+        alpha = clamp(p_term_x+i_term_x+d_term_x, -5, 5) 
+        beta = clamp(p_term_y+i_term_y+d_term_y, -5, 5) 
+
+        #determine wind 
         wind_speed = wind_at_sim[i] 
         wind_velocity[0] = wind_speed*wind_direction[0] 
         wind_velocity[1] = wind_speed*wind_direction[1] 
@@ -168,8 +200,8 @@ def main() -> None:
         
 
         #determine normal force in body frame
-        F_norm_b[0] = 0.125*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
-        F_norm_b[1] = 0.125*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa 
+        F_norm_b[0] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
+        F_norm_b[1] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa 
         #convert normal force to world frame
         F_norm_w = rm.rotate_v_w(q, F_norm_b) 
 
@@ -198,7 +230,7 @@ def main() -> None:
 
         #Torque on the rocket
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
-        torque_drag_b = np.cross(M_arm_aero_force_b, F_drag_b) 
+        torque_drag_b = np.cross(M_arm_aero_force_b, F_drag_b)   
         torque_norm_b = np.cross(M_arm_aero_force_b, F_norm_b) 
 
 
