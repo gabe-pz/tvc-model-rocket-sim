@@ -1,8 +1,9 @@
 sim_data.json
 
-__pycache__/
+
+/__pycache__
 *.pyc
-.venv/
+.venv
 .env
 
 .vscode/
