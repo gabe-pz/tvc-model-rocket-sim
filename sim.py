@@ -1,7 +1,7 @@
 import numpy as np  
 import math, json, os, random 
 import rocket_math as rm
-
+import time
 #clear file before new run
 if os.path.isfile("sim_data.json"):
     os.remove("sim_data.json")
@@ -26,14 +26,14 @@ log_interval: int = 10
 #pid 
 setpoint: float = 0.0 
 
-kp_x: float = 0.1
-kp_y: float = 0.1
+kp_x: float = 0.2
+kp_y: float = 0.2
 
-ki_x: float = 0.01
-ki_y: float = 0.01
+ki_x: float = 0.0
+ki_y: float = 0.0
 
-kd_x: float = 0.255
-kd_y: float = 0.255
+kd_x: float = 0.0
+kd_y: float = 0.0
 
 #physical constants
 g: float = 9.81
@@ -83,7 +83,7 @@ wind_at_sim = np.interp(sim_times, turb_times, wind)
 
 #thrust vector function
 def f_thrust_b(alpha: float, beta: float, t: float) ->list:
-    f_thrust_mag: float = 15
+    f_thrust_mag: float = 14.4
     if(t <= burn_time):
         return [f_thrust_mag*math.sin(alpha), f_thrust_mag*math.sin(beta), f_thrust_mag*math.cos(alpha)*math.cos(beta)]
     else:
@@ -155,6 +155,8 @@ def main() -> None:
     d_term_x: float = 0.0
     d_term_y: float = 0.0 
     for i, t in enumerate(sim_times):
+
+        #pid
         error_x = setpoint - math.degrees(psi[0])
         error_y = setpoint - math.degrees(psi[1]) 
         
@@ -173,7 +175,7 @@ def main() -> None:
         alpha = clamp(p_term_x+i_term_x+d_term_x, -5, 5) 
         beta = clamp(p_term_y+i_term_y+d_term_y, -5, 5) 
 
-        #determine wind 
+        #determine wind speed
         wind_speed = wind_at_sim[i] 
         wind_velocity[0] = wind_speed*wind_direction[0] 
         wind_velocity[1] = wind_speed*wind_direction[1] 
@@ -183,6 +185,7 @@ def main() -> None:
         v_rel_fluid_w[0] = v[0] - wind_velocity[0] 
         v_rel_fluid_w[1] = v[1] - wind_velocity[1] 
         v_rel_fluid_w[2] = v[2] - wind_velocity[2] 
+        
         v_rel_fluid_b = rm.rotate_v_b(q, v_rel_fluid_w) 
 
         v_rel_fluid_mag = math.sqrt(v_rel_fluid_w[0]**2+v_rel_fluid_w[1]**2+v_rel_fluid_w[2]**2) 
@@ -191,21 +194,18 @@ def main() -> None:
         alpha_x_aoa = math.atan2(v_rel_fluid_b[0], v_rel_fluid_b[2])  
         alpha_y_aoa  = math.atan2(v_rel_fluid_b[1], v_rel_fluid_b[2]) 
 
-        #determine drag force in world frame 
-        F_drag_w[0] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid_mag*v_rel_fluid_w[0]) 
-        F_drag_w[1] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid_mag*v_rel_fluid_w[1]) 
-        F_drag_w[2] = -0.5*rho*drag_coef*reference_area*(v_rel_fluid_mag*v_rel_fluid_w[2]) 
-        #convert drag force to body frame
-        F_drag_b = rm.rotate_v_b(q, F_drag_w) 
-        
+        #determine axial drag in body frame then rotate for drag in world frame
+        F_drag_b = [0, 0, -0.5*rho*drag_coef*reference_area*abs(v_rel_fluid_b[2])*v_rel_fluid_b[2]] 
+        F_drag_w = rm.rotate_v_w(q, F_drag_b) 
 
-        #determine normal force in body frame
+        #determine normal force in body frame then rotate for normal force in world frame
         F_norm_b[0] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa 
         F_norm_b[1] = 0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa 
-        #convert normal force to world frame
+
         F_norm_w = rm.rotate_v_w(q, F_norm_b) 
 
         #Force of thrust, from body to world
+        
         F_thrust_b = f_thrust_b(math.radians(alpha), math.radians(beta), t) 
         F_thrust_w = rm.rotate_v_w(q, F_thrust_b)   
         
@@ -230,12 +230,11 @@ def main() -> None:
 
         #Torque on the rocket
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
-        torque_drag_b = np.cross(M_arm_aero_force_b, F_drag_b)   
         torque_norm_b = np.cross(M_arm_aero_force_b, F_norm_b) 
 
 
         #sum of torque on rocket
-        torque_b = [torque_thrust_b[0]+torque_drag_b[0]+torque_norm_b[0], torque_thrust_b[1]+torque_drag_b[1]+torque_norm_b[1], torque_thrust_b[2]+torque_drag_b[2]+torque_norm_b[2]]   
+        torque_b = [torque_thrust_b[0]+torque_norm_b[0], torque_thrust_b[1]+torque_norm_b[1], torque_thrust_b[2]+torque_norm_b[2]]
 
         #Compute angular acceleration
         alpha_b[0] = torque_b[0] / I_xx
@@ -283,7 +282,7 @@ def main() -> None:
     print()
     print("*****Final r and ψ*****") 
     print(f"Final r: x={r[0]:.2f}, y={r[1]:.2f}, z={r[2]:.2f}")  
-    print(f"Final ψ:   theta={math.degrees(psi[0]):.2f} deg, phi={math.degrees(psi[1]):.2f} deg")    
+    print(f"Final psi:   theta={math.degrees(psi[0]):.2f} deg, phi={math.degrees(psi[1]):.2f} deg")    
 
     #Log flight data to json
     data = {"r": log_r, "psi": log_psi} 

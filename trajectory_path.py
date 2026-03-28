@@ -75,7 +75,7 @@ def update(frame) -> tuple:
 
     # current sim time for this logged frame
     t = frame * effective_dt
-    ax.set_title(f'Flight Path  —  t = {t:.3f} s')
+    ax.set_title(f't = {t:.2f} s')
 
     return (point, trail, line_fwd, line_bwd)
 
