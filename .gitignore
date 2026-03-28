@@ -1,3 +1,11 @@
 sim_data.json
-.venv 
-__pycache__
+
+__pycache__/
+*.pyc
+.venv/
+.env
+
+.vscode/
+
+.DS_Store
+**/.DS_Store
