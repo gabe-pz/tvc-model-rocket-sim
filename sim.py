@@ -226,8 +226,6 @@ def main() -> None:
         r[1] += dt*v[1] 
         r[2] += dt*v[2]
 
-        #2. Torque and Rotation 
-
         #Torque on the rocket
         torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
         torque_norm_b = np.cross(M_arm_aero_force_b, F_norm_b) 
