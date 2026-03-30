@@ -1,7 +1,7 @@
 import numpy as np  
-import math, json, os, random 
+import math, json, os
 import rocket_math as rm
-import time
+
 #clear file before new run
 if os.path.isfile("sim_data.json"):
     os.remove("sim_data.json")
@@ -29,11 +29,11 @@ setpoint: float = 0.0
 kp_x: float = 0.2
 kp_y: float = 0.2
 
-ki_x: float = 0.0
-ki_y: float = 0.0
+ki_x: float = 0.01
+ki_y: float = 0.01
 
-kd_x: float = 0.0
-kd_y: float = 0.0
+kd_x: float = 0.255
+kd_y: float = 0.255
 
 #physical constants
 g: float = 9.81
@@ -102,7 +102,7 @@ def main() -> None:
     #init postion and its derivatives
     r: list[float] = [0.0, 0.0, 0.0]
     v: list[float] = [0.0, 0.0, 0.0]
-    a: list[float] = [0.0, 0.0, 0.0] 
+    a: list[float] = [0.0, 0.0, 0.0]  
 
     #init rotation stuff
     q: list[float] = [1.0, 0.0, 0.0, 0.0] 
