@@ -1,7 +1,7 @@
 import numpy as np  
 import math, json, os
 import rocket_math as rm
-import random 
+
 #clear file before new run
 if os.path.isfile("sim_data.json"):
     os.remove("sim_data.json")
@@ -109,13 +109,15 @@ def f_aero_b(q: list[float], wind_velocity: list[float], v: list[float]) -> list
         [0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_x_aoa,0.5*rho*norm_coef*reference_area*(v_rel_fluid_mag**2)*alpha_y_aoa,0]
     ]
 
-def acceleration_and_torque_forces(q: list[float], wind_velocity: list[float], alpha: float, beta: float, t: float, v: list[float]) -> list[list[float]]:
+def accelerations(q: list[float], wind_velocity: list[float], alpha: float, beta: float, t: float, v: list[float]) -> list[list[float]]:
+    
+    aero: list[list[float]] = f_aero_b(q, wind_velocity, v)
     #determine axial drag in body frame then rotate for drag in world frame
-    F_drag_b = f_aero_b(q, wind_velocity, v)[0] 
+    F_drag_b = aero[0]
     F_drag_w = rm.rotate_v_w(q, F_drag_b) 
 
     #determine normal force in body frame then rotate for normal force in world frame
-    F_norm_b = f_aero_b(q, wind_velocity, v)[1] 
+    F_norm_b = aero[1]
     F_norm_w = rm.rotate_v_w(q, F_norm_b) 
 
     #Force of thrust, from body to world
@@ -125,8 +127,15 @@ def acceleration_and_torque_forces(q: list[float], wind_velocity: list[float], a
     #Sum of forces in world
     F_w = [F_thrust_w[0]+F_drag_w[0]+F_norm_w[0], F_thrust_w[1]+F_drag_w[1]+F_norm_w[1], F_thrust_w[2]-mass*g+F_drag_w[2]+F_norm_w[2]]  
 
-    #accleration first, then norm, then thrust, w all torque forces in body frame 
-    return [[F_w[0] / mass, F_w[1] / mass, F_w[2] / mass], F_norm_b, F_thrust_b] 
+    #compute net torque
+    torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
+    torque_norm_b = np.cross(M_arm_aero_force_b, F_norm_b) 
+
+    #sum of torque on rocket
+    torque_b = [torque_thrust_b[0]+torque_norm_b[0], torque_thrust_b[1]+torque_norm_b[1], torque_thrust_b[2]+torque_norm_b[2]]
+    
+    return [[F_w[0] / mass, F_w[1] / mass, F_w[2] / mass], [torque_b[0]/ I_xx, torque_b[1]/I_yy]]  
+
 
 def clamp(value: float, min_val: float, max_val: float) -> float:
     return min(max(value, min_val), max_val) 
@@ -141,20 +150,13 @@ def main() -> None:
     #init postion and its derivatives
     r: list[float] = [0.0, 0.0, 0.0]
     v: list[float] = [0.0, 0.0, 0.0]
-    a: list[float] = [0.0, 0.0, 0.0]  
 
     #init rotation stuff
     q: list[float] = [1.0, 0.0, 0.0, 0.0] 
-    q_dot: list[float] = [0.0, 0.0, 0.0, 0.0] 
     psi: list[float] = [0.0, 0.0] # psi = (theta, phi),  
 
     #init angular acceleration and velocity  
     omega_b: list[float] = [0.0, 0.0, 0.0] 
-    alpha_b: list[float]= [0.0, 0.0, 0.0] 
-    omega_b_q: list[float] = [0.0, 0.0, 0.0, 0.0] 
-
-    #init torque 
-    torque_b = [] 
 
     #inital start values for angle of tvc
     alpha: float = 0.0
@@ -164,13 +166,6 @@ def main() -> None:
     wind_speed: float = 0.0
     wind_direction: list[float] = [1.0/math.sqrt(2), 1.0/math.sqrt(2), 0.0]   
     wind_velocity: list[float] = [wind_speed*wind_direction[0], wind_speed*wind_direction[1], wind_speed*wind_direction[2]] 
-
-    #init torque forces
-    F_norm_b: list[float] = [0.0, 0.0, 0.0]
-    F_thrust_b: list[float] = [0.0, 0.0, 0.0]
-
-    #init a and torque forces list of lists 
-    a_and_tau_fs: list[list[float]] = [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]] 
 
     #init pid
     error_x: float = 0.0
@@ -207,7 +202,40 @@ def main() -> None:
 
     v_wv2: list[float] = [0.0, 0.0, 0.0]
     v_wv3: list[float] = [0.0, 0.0, 0.0]
-    v_wv4: list[float] = [0.0, 0.0, 0.0]
+    v_wv4: list[float] = [0.0, 0.0, 0.0] 
+
+    k_w1: list[float] = [0.0, 0.0]
+    k_w2: list[float] = [0.0, 0.0]
+    k_w3: list[float] = [0.0, 0.0]
+    k_w4: list[float] = [0.0, 0.0]
+
+    alpha_1: list[float] = [0.0, 0.0]
+    alpha_2: list[float] = [0.0, 0.0]
+    alpha_3: list[float] = [0.0, 0.0]
+    alpha_4: list[float] = [0.0, 0.0]
+
+    k_q1: list[float] = [0.0, 0.0, 0.0, 0.0]
+    k_q2: list[float] = [0.0, 0.0, 0.0, 0.0]
+    k_q3: list[float] = [0.0, 0.0, 0.0, 0.0]
+    k_q4: list[float] = [0.0, 0.0, 0.0, 0.0]
+
+    qd1: list[float] = [0.0, 0.0, 0.0, 0.0]
+    qd2: list[float] = [0.0, 0.0, 0.0, 0.0]
+    qd3: list[float] = [0.0, 0.0, 0.0, 0.0]
+    qd4: list[float] = [0.0, 0.0, 0.0, 0.0]
+
+    q_mid2: list[float] = [1.0, 0.0, 0.0, 0.0]
+    q_mid3: list[float] = [1.0, 0.0, 0.0, 0.0]
+    q_end: list[float] = [1.0, 0.0, 0.0, 0.0]
+
+    omega_mid2: list[float] = [0.0, 0.0, 0.0]
+    omega_mid3: list[float] = [0.0, 0.0, 0.0]
+    omega_end: list[float] = [0.0, 0.0, 0.0]
+
+    omega_q1: list[float] = [0.0, 0.0, 0.0, 0.0]
+    omega_q2: list[float] = [0.0, 0.0, 0.0, 0.0]
+    omega_q3: list[float] = [0.0, 0.0, 0.0, 0.0]
+    omega_q4: list[float] = [0.0, 0.0, 0.0, 0.0]
 
     for i, t in enumerate(sim_times):
         #pid
@@ -229,83 +257,97 @@ def main() -> None:
         alpha = clamp(p_term_x+i_term_x+d_term_x, -5, 5) 
         beta = clamp(p_term_y+i_term_y+d_term_y, -5, 5) 
 
-
         #determine wind speed
         wind_speed = wind_at_sim[i] 
         wind_velocity[0] = wind_speed*wind_direction[0] 
         wind_velocity[1] = wind_speed*wind_direction[1] 
         wind_velocity[2] = wind_speed*wind_direction[2] 
-
-        a_and_tau_fs: list[list[float]] = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t, v) 
         
-        #apply rk4 method for v and r 
-        a1 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n, v)[0]
+        #first weights
+        result = accelerations(q, wind_velocity, alpha, beta, t_n, v)
+        a1 = result[0] 
+        alpha_1 = result[1]
+
+        k_w1 = [dt*alpha_1[0], dt*alpha_1[1]] 
         w_v1 = [a1[0]*dt, a1[1]*dt, a1[2]*dt]
         w_r1 = [v[0]*dt, v[1]*dt, v[2]*dt]
-        v_wv2 = [v[0] + w_v1[0]/2, v[1] + w_v1[1]/2, v[2] + w_v1[2]/2] 
 
-        a2 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_wv2)[0]
-        w_v2 = [2*a2[0]*dt, 2*a2[1]*dt, 2*a2[2]*dt]
-        w_r2 = [2*v_wv2[0]*dt, 2*v_wv2[1]*dt, 2*v_wv2[2]*dt] 
+        omega_q1 = rm.vec_to_pure_q(omega_b)
+        qd1 = rm.multiply_q_p(q, omega_q1)
+        k_q1 = [0.5*dt*qd1[0], 0.5*dt*qd1[1], 0.5*dt*qd1[2], 0.5*dt*qd1[3]]
+
+        v_wv2 = [v[0] + w_v1[0]/2, v[1] + w_v1[1]/2, v[2] + w_v1[2]/2] 
+        
+        #second weights
+        result = accelerations(q, wind_velocity, alpha, beta, t_n + dt/2, v_wv2)
+        a2 = result[0]
+        alpha_2 = result[1]
+
+        w_v2 = [a2[0]*dt, a2[1]*dt, a2[2]*dt]        
+        w_r2 = [v_wv2[0]*dt, v_wv2[1]*dt, v_wv2[2]*dt]
+        k_w2 = [alpha_2[0]*dt, alpha_2[1]*dt]
+
+        q_mid2 = rm.normalize_q([q[0] + k_q1[0]/2, q[1] + k_q1[1]/2, q[2] + k_q1[2]/2, q[3] + k_q1[3]/2])
+        omega_mid2 = [omega_b[0] + k_w1[0]/2, omega_b[1] + k_w1[1]/2, 0.0]
+        omega_q2 = rm.vec_to_pure_q(omega_mid2)
+        qd2 = rm.multiply_q_p(q_mid2, omega_q2)
+        k_q2 = [0.5*dt*qd2[0], 0.5*dt*qd2[1], 0.5*dt*qd2[2], 0.5*dt*qd2[3]]
+
         v_wv3 = [v[0] + w_v2[0]/2, v[1] + w_v2[1]/2, v[2] + w_v2[2]/2] 
         
-        a3 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_wv3)[0]
-        w_v3 = [2*a3[0]*dt, 2*a3[1]*dt, 2*a3[2]*dt]
-        w_r3 = [2*v_wv3[0]*dt, 2*v_wv3[1]*dt, 2*v_wv3[2]*dt]
-        v_wv4 = [v[0] + w_v3[0], v[1] + w_v3[1], v[2] + w_v3[2]]
+        #third weights
+        result = accelerations(q, wind_velocity, alpha, beta, t_n + dt/2, v_wv3)
+        a3 = result[0]
+        alpha_3 = result[1]
         
-        a4 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt, v_wv4)[0]
+        w_v3 = [a3[0]*dt, a3[1]*dt, a3[2]*dt]       
+        w_r3 = [v_wv3[0]*dt, v_wv3[1]*dt, v_wv3[2]*dt]
+        k_w3 = [alpha_3[0]*dt, alpha_3[1]*dt]
+
+        q_mid3 = rm.normalize_q([q[0] + k_q2[0]/2, q[1] + k_q2[1]/2, q[2] + k_q2[2]/2, q[3] + k_q2[3]/2])
+        omega_mid3 = [omega_b[0] + k_w2[0]/2, omega_b[1] + k_w2[1]/2, 0.0]
+        omega_q3 = rm.vec_to_pure_q(omega_mid3)
+        qd3 = rm.multiply_q_p(q_mid3, omega_q3)
+        k_q3 = [0.5*dt*qd3[0], 0.5*dt*qd3[1], 0.5*dt*qd3[2], 0.5*dt*qd3[3]]
+
+        v_wv4 = [v[0] + w_v3[0], v[1] + w_v3[1], v[2] + w_v3[2]]
+
+        #forth weights
+        result = accelerations(q, wind_velocity, alpha, beta, t_n + dt, v_wv4)
+        a4 = result[0]
+        alpha_4 = result[1]
+
         w_v4 = [a4[0]*dt, a4[1]*dt, a4[2]*dt]
         w_r4 = [v_wv4[0]*dt, v_wv4[1]*dt, v_wv4[2]*dt]
-        
-        #update v and r
-        v[0] += (1/6) * (w_v1[0] + w_v2[0] + w_v3[0] + w_v4[0])
-        v[1] += (1/6) * (w_v1[1] + w_v2[1] + w_v3[1] + w_v4[1])
-        v[2] += (1/6) * (w_v1[2] + w_v2[2] + w_v3[2] + w_v4[2]) 
+        k_w4 = [alpha_4[0]*dt, alpha_4[1]*dt]        
 
-        r[0] += (1/6) * (w_r1[0] + w_r2[0] + w_r3[0] + w_r4[0])
-        r[1] += (1/6) * (w_r1[1] + w_r2[1] + w_r3[1] + w_r4[1])
-        r[2] += (1/6) * (w_r1[2] + w_r2[2] + w_r3[2] + w_r4[2]) 
+        q_end  = rm.normalize_q([q[0] + k_q3[0],   q[1] + k_q3[1],   q[2] + k_q3[2],   q[3] + k_q3[3]]) 
+        omega_end = [omega_b[0] + k_w3[0], omega_b[1] + k_w3[1], 0.0]
+        omega_q4 = rm.vec_to_pure_q(omega_end)
+        qd4 = rm.multiply_q_p(q_end, omega_q4)
+        k_q4 = [0.5*dt*qd4[0], 0.5*dt*qd4[1], 0.5*dt*qd4[2], 0.5*dt*qd4[3]]
         
+        #update v, r and omega
+        v[0] += (1/6) * (w_v1[0] + 2*w_v2[0] + 2*w_v3[0] + w_v4[0])
+        v[1] += (1/6) * (w_v1[1] + 2*w_v2[1] + 2*w_v3[1] + w_v4[1])
+        v[2] += (1/6) * (w_v1[2] + 2*w_v2[2] + 2*w_v3[2] + w_v4[2]) 
+
+        r[0] += (1/6) * (w_r1[0] + 2*w_r2[0] + 2*w_r3[0] + w_r4[0])
+        r[1] += (1/6) * (w_r1[1] + 2*w_r2[1] + 2*w_r3[1] + w_r4[1])
+        r[2] += (1/6) * (w_r1[2] + 2*w_r2[2] + 2*w_r3[2] + w_r4[2]) 
+        
+        omega_b[0] += (1/6) * (k_w1[0] + 2*k_w2[0] + 2*k_w3[0] + k_w4[0]) 
+        omega_b[1] += (1/6) * (k_w1[1] + 2*k_w2[1] + 2*k_w3[1] + k_w4[1])
+
         #increment 
         t_n += dt
 
-        #forces that apply torque
-        F_norm_b = a_and_tau_fs[1]
-        F_thrust_b = a_and_tau_fs[2]
-
-        #compute net torque
-        torque_thrust_b = np.cross(M_arm_thrust_b, F_thrust_b) 
-        torque_norm_b = np.cross(M_arm_aero_force_b, F_norm_b) 
-
-        #sum of torque on rocket
-        torque_b = [torque_thrust_b[0]+torque_norm_b[0], torque_thrust_b[1]+torque_norm_b[1], torque_thrust_b[2]+torque_norm_b[2]]
-
-        #Compute angular acceleration
-        alpha_b[0] = torque_b[0] / I_xx
-        alpha_b[1] = torque_b[1] / I_yy
-
-        #Numerical integration for omega
-        omega_b[0] += dt*alpha_b[0]
-        omega_b[1] += dt*alpha_b[1] 
-
-        #Compute rate of change of quaternion
-        omega_b_q = rm.vec_to_pure_q(omega_b)
-        q_dot = rm.multiply_q_p(q, omega_b_q)
-        q_dot[0] = 1/2*q_dot[0] 
-        q_dot[1] = 1/2*q_dot[1] 
-        q_dot[2] = 1/2*q_dot[2] 
-        q_dot[3] = 1/2*q_dot[3] 
-
-        #Numerical integraion for q
-        q[0] += dt*q_dot[0]
-        q[1] += dt*q_dot[1]
-        q[2] += dt*q_dot[2]
-        q[3] += dt*q_dot[3]
-
-        #Renormalize q to account for numerical drift
+        q[0] += (1/6) * (k_q1[0] + 2*k_q2[0] + 2*k_q3[0] + k_q4[0])
+        q[1] += (1/6) * (k_q1[1] + 2*k_q2[1] + 2*k_q3[1] + k_q4[1])
+        q[2] += (1/6) * (k_q1[2] + 2*k_q2[2] + 2*k_q3[2] + k_q4[2])
+        q[3] += (1/6) * (k_q1[3] + 2*k_q2[3] + 2*k_q3[3] + k_q4[3])
         q = rm.normalize_q(q) 
-        
+
         #Convert quaternion to euler angles 
         psi = rm.q_to_euler(q) 
 
@@ -335,4 +377,4 @@ def main() -> None:
         json.dump(data, f) 
     
 if __name__ == "__main__":
-    main()
+    main() 
