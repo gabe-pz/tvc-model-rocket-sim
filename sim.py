@@ -26,14 +26,14 @@ log_interval: int = 10
 #pid 
 setpoint: float = 0.0 
 
-kp_x: float = 0.25
-kp_y: float = 0.25
+kp_x: float = 0.2
+kp_y: float = 0.2
 
-ki_x: float = 0.0125
-ki_y: float = 0.0125
+ki_x: float = 0.125
+ki_y: float = 0.125
 
-kd_x: float = 0.3
-kd_y: float = 0.3
+kd_x: float = 0.25
+kd_y: float = 0.25
 
 #physical constants
 g: float = 9.81
@@ -186,8 +186,29 @@ def main() -> None:
     
     d_term_x: float = 0.0
     d_term_y: float = 0.0   
-
+    
+    #init rk4 
     t_n: float = 0.0
+    
+    a1: list[float] = [0.0, 0.0, 0.0]
+    a2: list[float] = [0.0, 0.0, 0.0]
+    a3: list[float] = [0.0, 0.0, 0.0]
+    a4: list[float] = [0.0, 0.0, 0.0] 
+
+    w_v1: list[float] = [0.0, 0.0, 0.0]
+    w_v2: list[float] = [0.0, 0.0, 0.0]
+    w_v3: list[float] = [0.0, 0.0, 0.0]
+    w_v4: list[float] = [0.0, 0.0, 0.0] 
+
+    w_r1: list[float] = [0.0, 0.0, 0.0]
+    w_r2: list[float] = [0.0, 0.0, 0.0]
+    w_r3: list[float] = [0.0, 0.0, 0.0]
+    w_r4 : list[float] = [0.0, 0.0, 0.0]
+
+    v_wv2: list[float] = [0.0, 0.0, 0.0]
+    v_wv3: list[float] = [0.0, 0.0, 0.0]
+    v_wv4: list[float] = [0.0, 0.0, 0.0]
+
     for i, t in enumerate(sim_times):
         #pid
         error_x = setpoint - math.degrees(psi[0])
@@ -218,38 +239,35 @@ def main() -> None:
         a_and_tau_fs: list[list[float]] = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t, v) 
         
         #apply rk4 method for v and r 
+        a1 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n, v)[0]
+        w_v1 = [a1[0]*dt, a1[1]*dt, a1[2]*dt]
+        w_r1 = [v[0]*dt, v[1]*dt, v[2]*dt]
+        v_wv2 = [v[0] + w_v1[0]/2, v[1] + w_v1[1]/2, v[2] + w_v1[2]/2] 
 
-        #k1-> uses current velocity and current acceleration
-        accel1 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n, v)[0]
-        kv1 = [accel1[0]*dt, accel1[1]*dt, accel1[2]*dt]
-        kp1 = [v[0]*dt, v[1]*dt, v[2]*dt]
+        a2 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_wv2)[0]
+        w_v2 = [2*a2[0]*dt, 2*a2[1]*dt, 2*a2[2]*dt]
+        w_r2 = [2*v_wv2[0]*dt, 2*v_wv2[1]*dt, 2*v_wv2[2]*dt] 
+        v_wv3 = [v[0] + w_v2[0]/2, v[1] + w_v2[1]/2, v[2] + w_v2[2]/2] 
+        
+        a3 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_wv3)[0]
+        w_v3 = [2*a3[0]*dt, 2*a3[1]*dt, 2*a3[2]*dt]
+        w_r3 = [2*v_wv3[0]*dt, 2*v_wv3[1]*dt, 2*v_wv3[2]*dt]
+        v_wv4 = [v[0] + w_v3[0], v[1] + w_v3[1], v[2] + w_v3[2]]
+        
+        a4 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt, v_wv4)[0]
+        w_v4 = [a4[0]*dt, a4[1]*dt, a4[2]*dt]
+        w_r4 = [v_wv4[0]*dt, v_wv4[1]*dt, v_wv4[2]*dt]
+        
+        #update v and r
+        v[0] += (1/6) * (w_v1[0] + w_v2[0] + w_v3[0] + w_v4[0])
+        v[1] += (1/6) * (w_v1[1] + w_v2[1] + w_v3[1] + w_v4[1])
+        v[2] += (1/6) * (w_v1[2] + w_v2[2] + w_v3[2] + w_v4[2]) 
 
-        #k2 -> midpoint "trial" using k1
-        v_tmp2 = [v[0] + kv1[0]/2, v[1] + kv1[1]/2, v[2] + kv1[2]/2]
-        accel2 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_tmp2)[0]
-        kv2 = [accel2[0]*dt, accel2[1]*dt, accel2[2]*dt]
-        kp2 = [v_tmp2[0]*dt, v_tmp2[1]*dt, v_tmp2[2]*dt]
-
-        #k3 -> midpoint "trial" using k2
-        v_tmp3 = [v[0] + kv2[0]/2, v[1] + kv2[1]/2, v[2] + kv2[2]/2]
-        accel3 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_tmp3)[0]
-        kv3 = [accel3[0]*dt, accel3[1]*dt, accel3[2]*dt]
-        kp3 = [v_tmp3[0]*dt, v_tmp3[1]*dt, v_tmp3[2]*dt]
-
-        #k4-> End of steping trials, using k3 for final
-        v_tmp4 = [v[0] + kv3[0], v[1] + kv3[1], v[2] + kv3[2]]
-        accel4 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt, v_tmp4)[0]
-        kv4 = [accel4[0]*dt, accel4[1]*dt, accel4[2]*dt]
-        kp4 = [v_tmp4[0]*dt, v_tmp4[1]*dt, v_tmp4[2]*dt]
-
-        v[0] += (1/6) * (kv1[0] + 2*kv2[0] + 2*kv3[0] + kv4[0])
-        v[1] += (1/6) * (kv1[1] + 2*kv2[1] + 2*kv3[1] + kv4[1])
-        v[2] += (1/6) * (kv1[2] + 2*kv2[2] + 2*kv3[2] + kv4[2]) 
-
-        r[0] += (1/6) * (kp1[0] + 2*kp2[0] + 2*kp3[0] + kp4[0])
-        r[1] += (1/6) * (kp1[1] + 2*kp2[1] + 2*kp3[1] + kp4[1])
-        r[2] += (1/6) * (kp1[2] + 2*kp2[2] + 2*kp3[2] + kp4[2]) 
-        #increment
+        r[0] += (1/6) * (w_r1[0] + w_r2[0] + w_r3[0] + w_r4[0])
+        r[1] += (1/6) * (w_r1[1] + w_r2[1] + w_r3[1] + w_r4[1])
+        r[2] += (1/6) * (w_r1[2] + w_r2[2] + w_r3[2] + w_r4[2]) 
+        
+        #increment 
         t_n += dt
 
         #forces that apply torque
