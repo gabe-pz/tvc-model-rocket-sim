@@ -1,7 +1,7 @@
 import numpy as np  
 import math, json, os
 import rocket_math as rm
-
+import random 
 #clear file before new run
 if os.path.isfile("sim_data.json"):
     os.remove("sim_data.json")
@@ -26,14 +26,14 @@ log_interval: int = 10
 #pid 
 setpoint: float = 0.0 
 
-kp_x: float = 0.2
-kp_y: float = 0.2
+kp_x: float = 0.25
+kp_y: float = 0.25
 
-ki_x: float = 0.01
-ki_y: float = 0.01
+ki_x: float = 0.0125
+ki_y: float = 0.0125
 
-kd_x: float = 0.255
-kd_y: float = 0.255
+kd_x: float = 0.3
+kd_y: float = 0.3
 
 #physical constants
 g: float = 9.81
@@ -185,8 +185,9 @@ def main() -> None:
     i_term_y: float = 0.0 
     
     d_term_x: float = 0.0
-    d_term_y: float = 0.0 
+    d_term_y: float = 0.0   
 
+    t_n: float = 0.0
     for i, t in enumerate(sim_times):
         #pid
         error_x = setpoint - math.degrees(psi[0])
@@ -215,16 +216,41 @@ def main() -> None:
         wind_velocity[2] = wind_speed*wind_direction[2] 
 
         a_and_tau_fs: list[list[float]] = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t, v) 
+        
+        #apply rk4 method for v and r 
 
-        a = a_and_tau_fs[0] 
+        #k1-> uses current velocity and current acceleration
+        accel1 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n, v)[0]
+        kv1 = [accel1[0]*dt, accel1[1]*dt, accel1[2]*dt]
+        kp1 = [v[0]*dt, v[1]*dt, v[2]*dt]
 
-        v[0] += dt*a[0]  
-        v[1] += dt*a[1] 
-        v[2] += dt*a[2]  
+        #k2 -> midpoint "trial" using k1
+        v_tmp2 = [v[0] + kv1[0]/2, v[1] + kv1[1]/2, v[2] + kv1[2]/2]
+        accel2 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_tmp2)[0]
+        kv2 = [accel2[0]*dt, accel2[1]*dt, accel2[2]*dt]
+        kp2 = [v_tmp2[0]*dt, v_tmp2[1]*dt, v_tmp2[2]*dt]
 
-        r[0] += dt*v[0]   
-        r[1] += dt*v[1] 
-        r[2] += dt*v[2]
+        #k3 -> midpoint "trial" using k2
+        v_tmp3 = [v[0] + kv2[0]/2, v[1] + kv2[1]/2, v[2] + kv2[2]/2]
+        accel3 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt/2, v_tmp3)[0]
+        kv3 = [accel3[0]*dt, accel3[1]*dt, accel3[2]*dt]
+        kp3 = [v_tmp3[0]*dt, v_tmp3[1]*dt, v_tmp3[2]*dt]
+
+        #k4-> End of steping trials, using k3 for final
+        v_tmp4 = [v[0] + kv3[0], v[1] + kv3[1], v[2] + kv3[2]]
+        accel4 = acceleration_and_torque_forces(q, wind_velocity, alpha, beta, t_n + dt, v_tmp4)[0]
+        kv4 = [accel4[0]*dt, accel4[1]*dt, accel4[2]*dt]
+        kp4 = [v_tmp4[0]*dt, v_tmp4[1]*dt, v_tmp4[2]*dt]
+
+        v[0] += (1/6) * (kv1[0] + 2*kv2[0] + 2*kv3[0] + kv4[0])
+        v[1] += (1/6) * (kv1[1] + 2*kv2[1] + 2*kv3[1] + kv4[1])
+        v[2] += (1/6) * (kv1[2] + 2*kv2[2] + 2*kv3[2] + kv4[2]) 
+
+        r[0] += (1/6) * (kp1[0] + 2*kp2[0] + 2*kp3[0] + kp4[0])
+        r[1] += (1/6) * (kp1[1] + 2*kp2[1] + 2*kp3[1] + kp4[1])
+        r[2] += (1/6) * (kp1[2] + 2*kp2[2] + 2*kp3[2] + kp4[2]) 
+        #increment
+        t_n += dt
 
         #forces that apply torque
         F_norm_b = a_and_tau_fs[1]
