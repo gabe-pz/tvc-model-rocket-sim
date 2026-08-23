@@ -24,7 +24,7 @@ The question is then which angles must you move the thrust vector to, such that 
 
 #### Environment
 
-The environment the agent interacts with is the 6DOF physics simulator. The sim uses numerical integration for getting position and rotations via Newtons second law, uses quaternions for rotations, simulates wind with stochastic turbulence models, uses servos slewing and partial misalignment, and uses basic mass depletion for burned fuel. The coordinate system the simulator uses a typical right hand one with,
+The environment the agent interacts with is the 6DOF physics simulator. The sim uses numerical integration for getting position and rotations via Newtons second law, uses quaternions for rotations, simulates wind with stochastic turbulence models, uses servos slewing and partial misalignment, and uses basic mass depletion for burned fuel. The coordinate system the simulator uses a typical right hand one with the z-axis pointing up and,
 
 $$
 {+\hat z = \hat x \times  \hat y}
